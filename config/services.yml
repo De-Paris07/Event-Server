@@ -1,0 +1,56 @@
+parameters:
+    service_name: '%env(SERVICE_NAME)%'
+    socks5: ''
+    chat_id: ''
+    chat_id_dev: ''
+    token: ''
+    environments: ["dev", "prod"]
+    use_proxy: '%env(USE_PROXY)%'
+    elastic_host: '%env(ELASTIC_HOST)%'
+
+services:
+    # default configuration for services in *this* file
+    _defaults:
+        # automatically injects dependencies in your services
+        autowire: true
+        # automatically registers your services as commands, event subscribers, etc.
+        autoconfigure: true
+        # this means you cannot fetch services directly from the container via $container->get()
+        # if you need to do this, you can override this setting on individual services
+        public: false
+
+    # makes classes in src/ available to be used as services
+    # this creates a service per class whose id is the fully-qualified class name
+    App\:
+        resource: '../src/*'
+        exclude: '../src/{DependencyInjection,Entity,Migration,Tests,Exception,Kernel.php}'
+
+    App\Listener\ExceptionResponseCustomizeListener:
+        tags:
+        - { name: kernel.event_listener, event: kernel.exception, method: onKernelException }
+
+    App\Listener\AuthClientCheckListener:
+        tags:
+        - { name: kernel.event_listener, event: kernel.request, method: onKernelRequest }
+
+    App\Listener\ApplyAuthToResponseListener:
+        tags:
+        - { name: kernel.event_listener, event: kernel.response, method: onKernelResponse }
+
+    App\Command\EventsDistributeStartCommand:
+        arguments: ['@App\Consumer\EventDistributeConsumer', '@App\Job\EventJob']
+
+    App\Command\FailEventProcessingStartCommand:
+        arguments: ['@App\Consumer\FailEventProcessingConsumer', '@App\Job\FailEventProcessingJob']
+
+    App\Command\QueryDistributeStartCommand:
+        arguments: ['@App\Consumer\QueryDistributeConsumer', '@App\Job\QueryJob']
+
+    App\Command\RetryDistributeCommand:
+        arguments: ['@App\Consumer\RetryDistributeConsumer', '@App\Job\RetryJob']
+
+    App\Command\SuccessEventProcessingStartCommand:
+        arguments: ['@App\Consumer\SuccessEventProcessingConsumer', '@App\Job\SuccessEventProcessingJob']
+
+    App\Service\ElasticsearchService:
+        arguments: [ '%elastic_host%' ]

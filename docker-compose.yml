@@ -1,0 +1,166 @@
+version: '3.6'
+
+services:
+  db:
+    image: 'mysql:5.7.30'
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: 123
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3307:3306"
+    networks:
+      local:
+    volumes:
+      - "db-data:/var/lib/mysql"
+
+  redis:
+    image: 'bitnami/redis:latest'
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+    ports:
+      - "6380:6379"
+    networks:
+      local:
+      event-service-external:
+        aliases:
+          - event-server.loc
+
+  php:
+    build:
+      context: docker/php
+      args:
+        PHP_VERSION: 7.4
+        USER_GID: 1000
+        USER_UID: 1000
+    environment:
+      PHP_INI_MEMORY_LIMIT: 512M
+      PHP_IDE_CONFIG: "serverName=Docker"
+    ports:
+      - "${SOCKET_PORT}:${SOCKET_PORT}"
+    command: "php bin/console event:loop"
+    networks:
+      local:
+      event-service-external:
+        aliases:
+          - event-server.loc
+    volumes:
+      - "composer-cache:/srv/.composer"
+      - ".:/srv"
+
+  aurora:
+    image: mitulislam/beanstalkd-aurora:latest
+    ports:
+    - "3001:3000"
+    networks:
+        local:
+
+  nginx:
+    build:
+      context: docker/nginx
+    ports:
+      - "0.0.0.0:8020:80"
+    networks:
+      local:
+      event-service-external:
+        aliases:
+          - event-server.loc
+    volumes:
+      - ".:/srv"
+
+  beanstalkd:
+    image: schickling/beanstalkd:latest
+    restart: always
+    ports:
+      - "11301:11300"
+    networks:
+      local:
+      event-service-external:
+#        aliases:
+#          - beanstalkd.loc
+
+  elasticsearch:
+    build:
+      context: docker/elasticsearch/
+      args:
+        ELK_VERSION: $ELK_VERSION
+    volumes:
+      - type: bind
+        source: ./docker/elasticsearch/config/elasticsearch.yml
+        target: /usr/share/elasticsearch/config/elasticsearch.yml
+        read_only: true
+      - type: volume
+        source: elasticsearch
+        target: /usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      ES_JAVA_OPTS: "-Xmx256m -Xms256m"
+      ELASTIC_PASSWORD: changeme
+      # Use single node discovery in order to disable production mode and avoid bootstrap checks.
+      # see: https://www.elastic.co/guide/en/elasticsearch/reference/current/bootstrap-checks.html
+      discovery.type: single-node
+    networks:
+      - elk
+
+  logstash:
+    build:
+      context: docker/logstash/
+      args:
+        ELK_VERSION: $ELK_VERSION
+    volumes:
+      - type: bind
+        source: ./docker/logstash/config/
+        target: /usr/share/logstash/config/
+        read_only: true
+      - type: bind
+        source: ./docker/logstash/pipeline
+        target: /usr/share/logstash/pipeline
+        read_only: true
+    ports:
+      - "5044:5044"
+      - "5000:5000/tcp"
+      - "5000:5000/udp"
+      - "9600:9600"
+    environment:
+      LS_JAVA_OPTS: "-Xmx256m -Xms256m"
+    networks:
+      - elk
+      - local
+    depends_on:
+      - elasticsearch
+
+  kibana:
+    build:
+      context: docker/kibana/
+      args:
+        ELK_VERSION: $ELK_VERSION
+    volumes:
+      - type: bind
+        source: ./docker/kibana/config/kibana.yml
+        target: /usr/share/kibana/config/kibana.yml
+        read_only: true
+    ports:
+      - "5601:5601"
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+
+networks:
+  local:
+    driver: bridge
+  event-service-external:
+    driver: bridge
+    name: server
+  elk:
+    driver: bridge
+
+volumes:
+  db-data:
+  composer-cache:
+  elasticsearch:

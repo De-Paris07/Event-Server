@@ -1,0 +1,70 @@
+imports:
+    - { resource: services.yml }
+
+framework:
+    secret: '%env(SECRET)%'
+
+# Doctrine Configuration
+doctrine:
+    dbal:
+        driver: 'pdo_mysql'
+        server_version: '5.7'
+        charset: UTF8
+
+        url: '%env(resolve:DATABASE_URL)%'
+    orm:
+        auto_generate_proxy_classes: '%kernel.debug%'
+        entity_managers:
+            default:
+                connection: default
+                naming_strategy: doctrine.orm.naming_strategy.underscore
+                auto_mapping: true
+                mappings:
+                    App:
+                        type: annotation
+                        dir: "%kernel.root_dir%/Entity"
+                        is_bundle: false
+                        prefix: App\Entity
+                        alias: App
+
+doctrine_migrations:
+    dir_name: '%kernel.root_dir%/Migration'
+    namespace: App\Migration
+    table_name: migration_versions
+    name: 'Application Migrations'
+    organize_migrations: false
+    custom_template: ~
+
+leezy_pheanstalk:
+    pheanstalks:
+        primary:
+            server: '%env(PHEANSTALK_SERVER)%'
+            default: true
+
+sentry:
+    dsn: ""
+    options:
+        release: '%env(SENTRY_RELEASE)%'
+
+monolog:
+    channels: ['customEvent']
+    handlers:
+        redis:
+            type: service
+            id: snc_redis.monolog.handler
+            level: debug
+            channels: ["customEvent"]
+
+snc_redis:
+    clients:
+        monolog:
+            type: predis
+            alias: monolog
+            dsn: '%env(REDIS_URL_EVENTS)%'
+            logging: false
+            options:
+                connection_persistent: true
+            #scheme: tcp
+    monolog:
+        client: monolog
+        key: monolog

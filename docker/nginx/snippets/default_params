@@ -1,0 +1,42 @@
+## /etc/nginx/default_params
+
+listen 80 default_server;
+server_name _;
+charset utf-8;
+server_tokens off;
+index index.html;
+
+## custom error pages
+# include /usr/share/nginx/error-pages/error-pages.nginx;
+#
+
+## php-fpm healthcheck + status
+location ~ ^/fpm/(ping|status) {
+    # fastcgi_pass backend;
+    resolver 127.0.0.11 valid=10s;
+    set $phpUpstream php:9000;
+    fastcgi_pass $phpUpstream;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    include fastcgi_params;
+}
+
+## deny public access to all 'dotfiles'
+location ~  /\. {
+    access_log off;
+    log_not_found off;
+    deny all;
+}
+
+## disallow indexing for search crawlers
+location = /robots.txt {
+    return 200 "User-agent: *\nDisallow: /\n";
+    allow all;
+    log_not_found off;
+    access_log off;
+}
+
+## silent common requests
+location = /favicon.ico {
+    log_not_found off;
+    access_log off;
+}
