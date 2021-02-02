@@ -41,7 +41,7 @@ services:
       PHP_IDE_CONFIG: "serverName=Docker"
     ports:
       - "${SOCKET_PORT}:${SOCKET_PORT}"
-    command: "php bin/console event:loop"
+#    command: "php bin/console event:loop"
     networks:
       local:
       event-service-external:
